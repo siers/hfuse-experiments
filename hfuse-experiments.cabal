@@ -1,0 +1,21 @@
+Name:                   hfuse-experiments
+Version:                0.0.0.1
+License:                BSD3
+Author:                 siers
+Description:            hfuse experiments
+Homepage:               https://github.com/siers/hfuse-experiments
+Category:               System
+Stability:              Experimental
+Cabal-Version:          >= 1.10
+Build-Type:             Simple
+
+executable MemoryFS
+  build-depends:  base >= 4 && < 5, HFuse, unix, bytestring, text, directory-tree
+  main-is: MemoryFS.hs
+  hs-source-dirs: memory
+  ghc-options: -threaded
+  Default-Language: Haskell2010
+
+source-repository head
+    type:       git
+    location:   https://github.com/m15k/hfuse.git
