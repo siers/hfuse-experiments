@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE UnicodeSyntax #-}
+{-# LANGUAGE UnicodeSyntax, NamedFieldPuns #-}
 
 module Main where
 
@@ -32,6 +32,7 @@ import System.Posix.Types
 import Text.Pretty.Simple
 
 import Control.Applicative
+import System.Posix.IO (createFile)
 
 type FileName = String
 
@@ -44,6 +45,7 @@ data DirTree
 
 makeBaseFunctor ''DirTree
 
+-- https://github.com/recursion-schemes/recursion-schemes/issues/146
 sequencer :: (Recursive r, Corecursive r, Traversable t, Base r ~ t, Monad m) => Compose m t (m r) -> m r
 sequencer = fmap embed . (sequence <=< getCompose)
 
@@ -52,8 +54,8 @@ unfoldM = refold sequencer . fmap Compose
 
 type RootWithName = (FilePath, FilePath)
 
-build :: RootWithName -> IO (DirTreeF RootWithName)
-build (root, name) = do
+load :: RootWithName -> IO (DirTreeF RootWithName)
+load (root, name) = do
   isFile <- doesFileExist path
   mode <- fileMode <$> getFileStatus path
   if isFile
@@ -66,10 +68,22 @@ build (root, name) = do
  where
   path = root </> name
 
+dump :: DirTreeF (String -> IO ()) -> (String -> IO ())
+dump (LeafF (File name mode contents)) = \root -> writeFile (root </> name) contents
+dump (BranchF (File name mode ()) next) = \root -> do
+  let path = root </> name
+  createDirectoryIfMissing False path
+  mapM_ ($ path) next
+
+renameCopy :: DirTree -> DirTree
+renameCopy (Branch f@File{fname} rest) = Branch (f {fname = fname ++ "-copy" }) rest
+renameCopy (Leaf f@File{fname}) = Leaf (f {fname = fname ++ "-copy" })
+
+copy :: FilePath -> (DirTree -> DirTree) -> IO ()
+copy from rename = flip (cata dump) "" . rename =<< unfoldM load ("", from)
+
 main :: IO ()
 main = do
   paths <- getArgs
-
   forM_ paths $ \path -> do
-    tree <- unfoldM build ("", path) :: IO DirTree
-    pPrint tree
+    copy path renameCopy
