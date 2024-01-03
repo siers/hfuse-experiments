@@ -37,18 +37,12 @@ type FileName = String
 
 data File c = File { fname :: FileName, fmode :: FileMode, fcont :: c } deriving (Show)
 
-data LeafDirTree
-  = Branch (File ()) [LeafDirTree]
+data DirTree
+  = Branch (File ()) [DirTree]
   | Leaf (File String)
   deriving (Show)
 
-data DirTree c
-  = TDir {name :: FileName, contents :: [DirTree c]}
-  | TFile {name :: FileName, file :: c}
-  deriving (Show)
-
 makeBaseFunctor ''DirTree
-makeBaseFunctor ''LeafDirTree
 
 sequencer :: (Recursive r, Corecursive r, Traversable t, Base r ~ t, Monad m) => Compose m t (m r) -> m r
 sequencer = fmap embed . (sequence <=< getCompose)
@@ -56,23 +50,10 @@ sequencer = fmap embed . (sequence <=< getCompose)
 unfoldM :: (Monad m, Recursive c, Corecursive c, Traversable (Base c)) => (a -> m (Base c a)) -> a -> m c
 unfoldM = refold sequencer . fmap Compose
 
-build :: (FilePath, FilePath) -> IO (DirTreeF () (FilePath, FilePath))
-build (root, name) = do
-  isFile <- doesFileExist path
-  if isFile
-    then do
-      stat <- getFileStatus path
-      pure $ TFileF name ()
-    else do
-      cs <- listDirectory path
-      pure $ TDirF name (fmap (path,) cs)
- where
-  path = root </> name
-
 type RootWithName = (FilePath, FilePath)
 
-buildTree :: RootWithName -> IO (LeafDirTreeF RootWithName)
-buildTree (root, name) = do
+build :: RootWithName -> IO (DirTreeF RootWithName)
+build (root, name) = do
   isFile <- doesFileExist path
   mode <- fileMode <$> getFileStatus path
   if isFile
@@ -90,9 +71,5 @@ main = do
   paths <- getArgs
 
   forM_ paths $ \path -> do
-    tree <- unfoldM build ("", path) :: IO (DirTree ())
-    pPrint tree
-
-  forM_ paths $ \path -> do
-    tree <- unfoldM buildTree ("", path) :: IO LeafDirTree
+    tree <- unfoldM build ("", path) :: IO DirTree
     pPrint tree
